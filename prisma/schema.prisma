@@ -1,0 +1,480 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// AUTH MODELS (Auth.js / NextAuth)
+// ============================================================================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  
+  // User preferences
+  timezone      String?
+  themeMode     ThemeMode @default(SYSTEM)
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Auth.js relations
+  accounts      Account[]
+  sessions      Session[]
+
+  // App relations
+  budgetMembers    BudgetMember[]
+  createdBudgets   Budget[]         @relation("BudgetCreator")
+  createdCategories Category[]      @relation("CategoryCreator")
+  createdExpenses  Expense[]        @relation("ExpenseCreator")
+  createdPayees    Payee[]          @relation("PayeeCreator")
+  createdTags      Tag[]            @relation("TagCreator")
+  sentInvitations  Invitation[]     @relation("InvitationSender")
+  expenseSplits    ExpenseSplit[]   @relation("ExpenseSplitCreator")
+  recurringExpenses RecurringExpense[] @relation("RecurringExpenseCreator")
+}
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum ThemeMode {
+  LIGHT
+  DARK
+  SYSTEM
+}
+
+enum BudgetRole {
+  OWNER
+  EDITOR
+  VIEWER
+}
+
+enum BudgetCycleType {
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+  CUSTOM
+}
+
+enum AllocationMethod {
+  FIXED
+  PERCENTAGE
+  REMAINING
+}
+
+enum RecurrenceType {
+  ONCE_PER_CYCLE
+  MULTIPLE_PER_CYCLE
+  EVERY_N_CYCLES
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+// ============================================================================
+// BUDGET & COLLABORATION
+// ============================================================================
+
+model Budget {
+  id                    String          @id @default(cuid())
+  name                  String
+  description           String?
+  
+  // Financial settings - amounts stored as integers (minor units, e.g., cents)
+  totalAmount           Int
+  currency              String          @default("USD")
+  locale                String          @default("en-US")
+  
+  // Cycle settings
+  cycleType             BudgetCycleType @default(MONTHLY)
+  cycleStartDay         Int?            // Day of week (0-6) for weekly, day of month (1-31) for monthly
+  customCycleDays       Int?            // For CUSTOM cycle type
+  
+  // Optional date constraints
+  startDate             DateTime?
+  endDate               DateTime?
+  
+  // Carry-over settings (budget-level defaults)
+  carryOverEnabled      Boolean         @default(false)
+  carryOverNegative     Boolean         @default(false)
+  
+  // Expense deletion permission
+  allowDeleteOwnOnly    Boolean         @default(false)
+  
+  // Audit fields
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  createdById           String
+  createdBy             User            @relation("BudgetCreator", fields: [createdById], references: [id])
+  isDeleted             Boolean         @default(false)
+  deletedAt             DateTime?
+
+  // Relations
+  members               BudgetMember[]
+  categories            Category[]
+  expenses              Expense[]
+  cycles                BudgetCycle[]
+  payees                Payee[]
+  tags                  Tag[]
+  invitations           Invitation[]
+  recurringExpenses     RecurringExpense[]
+
+  @@index([createdById])
+  @@index([isDeleted])
+}
+
+model BudgetMember {
+  id        String     @id @default(cuid())
+  budgetId  String
+  userId    String
+  role      BudgetRole @default(EDITOR)
+  
+  // Track who added this member (for owner promotion rules)
+  addedById String?
+  
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  budget    Budget     @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([budgetId, userId])
+  @@index([userId])
+}
+
+model Invitation {
+  id          String           @id @default(cuid())
+  budgetId    String
+  email       String
+  role        BudgetRole       @default(EDITOR)
+  token       String           @unique @default(cuid())
+  status      InvitationStatus @default(PENDING)
+  
+  expiresAt   DateTime
+  
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  sentById    String
+  sentBy      User             @relation("InvitationSender", fields: [sentById], references: [id])
+
+  budget      Budget           @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([token])
+  @@index([budgetId])
+}
+
+// ============================================================================
+// BUDGET CYCLES
+// ============================================================================
+
+model BudgetCycle {
+  id          String    @id @default(cuid())
+  budgetId    String
+  
+  startDate   DateTime
+  endDate     DateTime
+  
+  // Carry-over amounts per category (stored as JSON for flexibility)
+  // Format: { "categoryId": amountInMinorUnits }
+  carryOverAmounts Json?
+  
+  // Snapshot data - captured when a new cycle begins (for historical viewing)
+  // Contains budget settings, categories, and expense totals as they were at cycle end
+  snapshot    Json?
+  // Format: {
+  //   budgetTotal: number,
+  //   currency: string,
+  //   locale: string,
+  //   categories: Array<{
+  //     id: string, name: string, icon: string?, color: string?,
+  //     allocationMethod: string, allocationValue: number, sortOrder: number
+  //   }>,
+  //   totalSpent: number,
+  //   categoryTotals: Record<string, number>
+  // }
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  budget      Budget    @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+
+  @@unique([budgetId, startDate])
+  @@index([budgetId])
+  @@index([startDate, endDate])
+}
+
+// ============================================================================
+// CATEGORIES
+// ============================================================================
+
+model Category {
+  id                  String           @id @default(cuid())
+  budgetId            String
+  name                String
+  description         String?
+  
+  // Visual customization
+  icon                String?          // Lucide icon name
+  color               String?          // Hex color
+  
+  // Allocation
+  allocationMethod    AllocationMethod @default(FIXED)
+  allocationValue     Int              // Amount in minor units for FIXED, basis points (0-10000) for PERCENTAGE
+  
+  // Category-specific settings
+  carryOverEnabled    Boolean?         // Null = use budget default
+  carryOverNegative   Boolean?         // Null = use budget default
+  
+  // Permissions
+  editableByAll       Boolean          @default(true)
+  
+  // Ordering
+  sortOrder           Int              @default(0)
+  
+  // Audit fields
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  createdById         String
+  createdBy           User             @relation("CategoryCreator", fields: [createdById], references: [id])
+  isDeleted           Boolean          @default(false)
+  deletedAt           DateTime?
+
+  budget              Budget           @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  expenseSplits       ExpenseSplit[]
+  recurringExpenses   RecurringExpense[]
+
+  @@unique([budgetId, name])
+  @@index([budgetId])
+  @@index([isDeleted])
+}
+
+// ============================================================================
+// EXPENSES
+// ============================================================================
+
+model Expense {
+  id                  String         @id @default(cuid())
+  budgetId            String
+  
+  // Core expense data
+  payeeId             String?
+  amount              Int            // Total amount in minor units
+  date                DateTime       // Date of expense (stored in UTC)
+  description         String?
+  
+  // Recurring expense link
+  recurringExpenseId  String?
+  recurringGroupId    String?        // Groups all instances of a recurring expense
+  
+  // Receipt parsing fields (planning for future)
+  receiptText         String?        // OCR extracted text
+  receiptProcessedAt  DateTime?      // When OCR was processed
+  receiptConfirmed    Boolean        @default(false) // User confirmed OCR data
+  
+  // Audit fields
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  createdById         String
+  createdBy           User           @relation("ExpenseCreator", fields: [createdById], references: [id])
+  isDeleted           Boolean        @default(false)
+  deletedAt           DateTime?
+
+  budget              Budget         @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  payee               Payee?         @relation(fields: [payeeId], references: [id])
+  recurringExpense    RecurringExpense? @relation(fields: [recurringExpenseId], references: [id])
+  splits              ExpenseSplit[]
+  tags                ExpenseTag[]
+
+  @@index([budgetId])
+  @@index([date])
+  @@index([payeeId])
+  @@index([recurringGroupId])
+  @@index([isDeleted])
+}
+
+model ExpenseSplit {
+  id               String           @id @default(cuid())
+  expenseId        String
+  categoryId       String
+  
+  // Split allocation
+  allocationMethod AllocationMethod @default(FIXED)
+  allocationValue  Int              // Amount in minor units for FIXED, basis points for PERCENTAGE
+  
+  // Calculated amount (for percentage/remaining splits)
+  calculatedAmount Int?
+  
+  // Audit fields
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  createdById      String
+  createdBy        User             @relation("ExpenseSplitCreator", fields: [createdById], references: [id])
+
+  expense          Expense          @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  category         Category         @relation(fields: [categoryId], references: [id])
+
+  @@unique([expenseId, categoryId])
+  @@index([categoryId])
+}
+
+// ============================================================================
+// RECURRING EXPENSES
+// ============================================================================
+
+model RecurringExpense {
+  id               String         @id @default(cuid())
+  budgetId         String
+  categoryId       String?
+  
+  // Template data
+  payeeId          String?
+  amount           Int            // Amount in minor units
+  description      String?
+  
+  // Recurrence settings
+  recurrenceType   RecurrenceType @default(ONCE_PER_CYCLE)
+  timesPerCycle    Int?           // For MULTIPLE_PER_CYCLE
+  cycleInterval    Int?           // For EVERY_N_CYCLES (e.g., 2 = every 2 cycles)
+  
+  // Next occurrence tracking
+  lastGeneratedAt  DateTime?
+  isActive         Boolean        @default(true)
+  
+  // Audit fields
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  createdById      String
+  createdBy        User           @relation("RecurringExpenseCreator", fields: [createdById], references: [id])
+  isDeleted        Boolean        @default(false)
+  deletedAt        DateTime?
+
+  budget           Budget         @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  category         Category?      @relation(fields: [categoryId], references: [id])
+  payee            Payee?         @relation(fields: [payeeId], references: [id])
+  generatedExpenses Expense[]
+
+  @@index([budgetId])
+  @@index([isActive])
+  @@index([isDeleted])
+}
+
+// ============================================================================
+// TAGS
+// ============================================================================
+
+model Tag {
+  id          String       @id @default(cuid())
+  budgetId    String
+  name        String
+  color       String?      // Hex color
+  
+  // Audit fields
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  createdById String
+  createdBy   User         @relation("TagCreator", fields: [createdById], references: [id])
+  isDeleted   Boolean      @default(false)
+  deletedAt   DateTime?
+
+  budget      Budget       @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  expenses    ExpenseTag[]
+
+  @@unique([budgetId, name])
+  @@index([budgetId])
+  @@index([isDeleted])
+}
+
+model ExpenseTag {
+  expenseId String
+  tagId     String
+
+  expense   Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([expenseId, tagId])
+  @@index([tagId])
+}
+
+// ============================================================================
+// PAYEES
+// ============================================================================
+
+model Payee {
+  id          String    @id @default(cuid())
+  budgetId    String
+  name        String
+  
+  // Future receipt parsing support
+  aliases     String[]  // Alternative names from receipts
+  
+  // Audit fields
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  createdById String
+  createdBy   User      @relation("PayeeCreator", fields: [createdById], references: [id])
+  isDeleted   Boolean   @default(false)
+  deletedAt   DateTime?
+
+  budget      Budget    @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  expenses    Expense[]
+  recurringExpenses RecurringExpense[]
+
+  @@unique([budgetId, name])
+  @@index([budgetId])
+  @@index([isDeleted])
+}
