@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getCycleBoundsForDate, getPreviousCycleBounds } from "@/lib/cycles";
@@ -189,7 +190,7 @@ export async function GET(
           );
           await db.budgetCycle.update({
             where: { id: previousCycle.id },
-            data: { snapshot },
+            data: { snapshot: snapshot as unknown as Prisma.InputJsonValue },
           });
         }
 
@@ -215,7 +216,7 @@ export async function GET(
 
     // For past cycles with snapshots, return snapshot data
     if (!isCurrentCycle && targetCycle.snapshot) {
-      const snapshot = targetCycle.snapshot as CycleSnapshot;
+      const snapshot = targetCycle.snapshot as unknown as CycleSnapshot;
       return NextResponse.json({
         cycle: targetCycle,
         categoryTotals: snapshot.categoryTotals,

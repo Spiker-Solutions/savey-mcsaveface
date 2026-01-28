@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { signIn } from 'next-auth/react';
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { signIn } from "next-auth/react";
 import {
   Container,
   Paper,
@@ -16,40 +16,42 @@ import {
   Anchor,
   Alert,
   Center,
-} from '@mantine/core';
-import { useForm } from '@mantine/form';
-import { Wallet, AlertCircle } from 'lucide-react';
-import Link from 'next/link';
+  Loader,
+} from "@mantine/core";
+import { useForm } from "@mantine/form";
+import { Wallet, AlertCircle } from "lucide-react";
+import Link from "next/link";
 
-export default function SignInPage() {
+function SignInContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
-  const error = searchParams.get('error');
+  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
+  const error = searchParams.get("error");
   const [loading, setLoading] = useState(false);
 
   const form = useForm({
     initialValues: {
-      email: '',
-      password: '',
+      email: "",
+      password: "",
     },
     validate: {
-      email: (value) => (/^\S+@\S+$/.test(value) ? null : 'Invalid email'),
-      password: (value) => (value.length >= 6 ? null : 'Password must be at least 6 characters'),
+      email: (value) => (/^\S+@\S+$/.test(value) ? null : "Invalid email"),
+      password: (value) =>
+        value.length >= 6 ? null : "Password must be at least 6 characters",
     },
   });
 
   const handleCredentialsSignIn = async (values: typeof form.values) => {
     setLoading(true);
     try {
-      const result = await signIn('credentials', {
+      const result = await signIn("credentials", {
         email: values.email,
         password: values.password,
         redirect: false,
       });
 
       if (result?.error) {
-        form.setErrors({ email: 'Invalid email or password' });
+        form.setErrors({ email: "Invalid email or password" });
       } else {
         router.push(callbackUrl);
       }
@@ -59,7 +61,7 @@ export default function SignInPage() {
   };
 
   const handleGoogleSignIn = () => {
-    signIn('google', { callbackUrl });
+    signIn("google", { callbackUrl });
   };
 
   return (
@@ -67,12 +69,12 @@ export default function SignInPage() {
       <Center mb="xl">
         <Wallet size={48} color="var(--mantine-color-blue-6)" />
       </Center>
-      
+
       <Title ta="center" fw={700}>
         Welcome back
       </Title>
       <Text c="dimmed" size="sm" ta="center" mt={5}>
-        Don&apos;t have an account?{' '}
+        Don&apos;t have an account?{" "}
         <Anchor component={Link} href="/auth/signup" size="sm">
           Create account
         </Anchor>
@@ -81,9 +83,9 @@ export default function SignInPage() {
       <Paper withBorder shadow="md" p={30} mt={30} radius="md">
         {error && (
           <Alert icon={<AlertCircle size={16} />} color="red" mb="md">
-            {error === 'OAuthAccountNotLinked'
-              ? 'This email is already associated with another account.'
-              : 'An error occurred during sign in.'}
+            {error === "OAuthAccountNotLinked"
+              ? "This email is already associated with another account."
+              : "An error occurred during sign in."}
           </Alert>
         )}
 
@@ -93,13 +95,13 @@ export default function SignInPage() {
               label="Email"
               placeholder="you@example.com"
               required
-              {...form.getInputProps('email')}
+              {...form.getInputProps("email")}
             />
             <PasswordInput
               label="Password"
               placeholder="Your password"
               required
-              {...form.getInputProps('password')}
+              {...form.getInputProps("password")}
             />
             <Button type="submit" fullWidth loading={loading}>
               Sign in
@@ -138,5 +140,19 @@ export default function SignInPage() {
         </Button>
       </Paper>
     </Container>
+  );
+}
+
+export default function SignInPage() {
+  return (
+    <Suspense
+      fallback={
+        <Center py={40}>
+          <Loader />
+        </Center>
+      }
+    >
+      <SignInContent />
+    </Suspense>
   );
 }
