@@ -134,22 +134,22 @@ export function AppShell({ children, user }: AppShellProps) {
                 <UnstyledButton>
                   <Group gap="xs">
                     <Avatar
-                      src={user.image}
-                      alt={user.name || "User"}
+                      src={user?.image}
+                      alt={user?.name || "User"}
                       radius="xl"
                       size="sm"
                     >
-                      {user.name?.[0]?.toUpperCase() || <User size={14} />}
+                      {user?.name?.[0]?.toUpperCase() || <User size={14} />}
                     </Avatar>
                     <Text size="sm" fw={500} visibleFrom="sm">
-                      {user.name || user.email}
+                      {user?.name || user?.email}
                     </Text>
                     <ChevronDown size={14} />
                   </Group>
                 </UnstyledButton>
               </Menu.Target>
               <Menu.Dropdown>
-                <Menu.Label>{user.email}</Menu.Label>
+                <Menu.Label>{user?.email}</Menu.Label>
                 <Menu.Item
                   component={Link}
                   href="/dashboard/settings"
