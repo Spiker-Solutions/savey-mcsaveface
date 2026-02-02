@@ -38,6 +38,7 @@ interface CategoryCardProps {
   canEdit: boolean;
   isOwner?: boolean;
   onClick?: () => void;
+  onEdit?: () => void;
   onDelete?: () => void;
 }
 
@@ -49,6 +50,7 @@ export function CategoryCard({
   canEdit,
   isOwner,
   onClick,
+  onEdit,
   onDelete,
 }: CategoryCardProps) {
   // Calculate allocated amount based on allocation method
@@ -138,6 +140,9 @@ export function CategoryCard({
                 </ActionIcon>
               </Menu.Target>
               <Menu.Dropdown onClick={(e) => e.stopPropagation()}>
+                <Menu.Item leftSection={<Edit size={14} />} onClick={onEdit}>
+                  Edit
+                </Menu.Item>
                 <Menu.Item
                   color="red"
                   leftSection={<Trash2 size={14} />}

@@ -17,7 +17,7 @@ import {
 import { DatePickerInput } from "@mantine/dates";
 import { useForm } from "@mantine/form";
 import { notifications } from "@mantine/notifications";
-import { parseMoneyToMinorUnits } from "@/lib/format";
+import { parseMoneyToMinorUnits, normalizeToUTCNoon } from "@/lib/format";
 
 interface Budget {
   id: string;
@@ -100,7 +100,7 @@ export function EditExpenseModal({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             amount: parseMoneyToMinorUnits(values.amount),
-            date: values.date.toISOString(),
+            date: normalizeToUTCNoon(values.date),
             payeeId: existingPayee?.id || null,
             payeeName: !existingPayee && values.payee ? values.payee : null,
             description: values.description || null,

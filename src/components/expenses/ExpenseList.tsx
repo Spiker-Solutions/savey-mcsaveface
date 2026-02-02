@@ -22,7 +22,7 @@ import { Filter, X } from "lucide-react";
 import { modals } from "@mantine/modals";
 import { notifications } from "@mantine/notifications";
 import { MoreVertical, Trash2, Edit, Receipt } from "lucide-react";
-import { formatMoney, formatDate } from "@/lib/format";
+import { formatMoney, formatDate, normalizeToUTCNoon } from "@/lib/format";
 
 interface Expense {
   id: string;
@@ -129,8 +129,9 @@ export function ExpenseList({
       if (filterPayee) params.set("payeeId", filterPayee);
       if (filterCreator) params.set("createdById", filterCreator);
       if (filterDateStart)
-        params.set("dateStart", filterDateStart.toISOString());
-      if (filterDateEnd) params.set("dateEnd", filterDateEnd.toISOString());
+        params.set("dateStart", normalizeToUTCNoon(filterDateStart));
+      if (filterDateEnd)
+        params.set("dateEnd", normalizeToUTCNoon(filterDateEnd));
       if (filterMinAmount)
         params.set("minAmount", String(Number(filterMinAmount) * 100));
       if (filterMaxAmount)

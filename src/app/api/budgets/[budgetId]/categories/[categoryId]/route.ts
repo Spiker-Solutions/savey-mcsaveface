@@ -153,6 +153,7 @@ export async function PATCH(
       allocationMethod,
       allocationValue,
       carryOverEnabled,
+      editableByAll,
     } = body;
 
     const category = await db.category.update({
@@ -164,6 +165,7 @@ export async function PATCH(
         ...(allocationMethod !== undefined && { allocationMethod }),
         ...(allocationValue !== undefined && { allocationValue }),
         ...(carryOverEnabled !== undefined && { carryOverEnabled }),
+        ...(editableByAll !== undefined && { editableByAll }),
       },
     });
 

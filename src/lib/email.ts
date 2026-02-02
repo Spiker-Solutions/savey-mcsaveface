@@ -1,4 +1,4 @@
-import { Resend } from 'resend';
+import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -18,7 +18,7 @@ export async function sendInvitationEmail({
   expiresAt,
 }: SendInvitationEmailParams) {
   const { data, error } = await resend.emails.send({
-    from: process.env.EMAIL_FROM || 'Budget App <noreply@example.com>',
+    from: process.env.EMAIL_FROM || "Savey <noreply@saveymcsaveface.com>",
     to,
     subject: `${inviterName} invited you to collaborate on "${budgetName}"`,
     html: `
@@ -40,11 +40,11 @@ export async function sendInvitationEmail({
             Accept Invitation
           </a>
           <p style="font-size: 14px; color: #666; margin-top: 24px;">
-            This invitation expires on ${expiresAt.toLocaleDateString('en-US', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
+            This invitation expires on ${expiresAt.toLocaleDateString("en-US", {
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
             })}.
           </p>
           <p style="font-size: 14px; color: #666;">
@@ -52,7 +52,7 @@ export async function sendInvitationEmail({
           </p>
           <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
           <p style="font-size: 12px; color: #999;">
-            Budget App - Collaborative Budgeting Made Simple
+            Savey McSaveface - Collaborative Budgeting Made Simple
           </p>
         </body>
       </html>
@@ -60,8 +60,8 @@ export async function sendInvitationEmail({
   });
 
   if (error) {
-    console.error('Failed to send invitation email:', error);
-    throw new Error('Failed to send invitation email');
+    console.error("Failed to send invitation email:", error);
+    throw new Error("Failed to send invitation email");
   }
 
   return data;

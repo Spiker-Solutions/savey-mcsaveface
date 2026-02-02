@@ -31,6 +31,7 @@ import {
   ChevronDown,
   User,
   Palette,
+  Sparkles,
 } from "lucide-react";
 
 interface AppShellProps {
@@ -49,6 +50,12 @@ const navigation = [
     href: "/dashboard",
     icon: LayoutDashboard,
     exact: true,
+  },
+  {
+    label: "Features",
+    href: "/dashboard/features",
+    icon: Sparkles,
+    exact: false,
   },
   {
     label: "Settings",

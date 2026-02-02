@@ -20,6 +20,7 @@ import {
   Menu,
   Tabs,
   Skeleton,
+  TextInput,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import {
@@ -31,6 +32,7 @@ import {
   TrendingDown,
   Wallet,
   History,
+  Trash2,
 } from "lucide-react";
 import { formatMoney } from "@/lib/format";
 import { CycleNavigator } from "@/components/budgets/CycleNavigator";
@@ -42,7 +44,9 @@ import { InviteModal } from "@/components/invitations/InviteModal";
 import { ExpenseList } from "@/components/expenses/ExpenseList";
 import { CategoryCard } from "@/components/categories/CategoryCard";
 import { DeleteCategoryModal } from "@/components/categories/DeleteCategoryModal";
+import { EditCategoryModal } from "@/components/categories/EditCategoryModal";
 import { AddSnapshotCategoryModal } from "@/components/categories/AddSnapshotCategoryModal";
+import { DeletePayeeModal } from "@/components/payees/DeletePayeeModal";
 
 interface Category {
   id: string;
@@ -51,6 +55,8 @@ interface Category {
   color: string | null;
   allocationMethod: string;
   allocationValue: number;
+  carryOverEnabled: boolean | null;
+  editableByAll: boolean;
 }
 
 interface Budget {
@@ -131,6 +137,13 @@ export function BudgetDetail({ budget, userRole, userId }: BudgetDetailProps) {
     id: string;
     name: string;
   } | null>(null);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [newPayeeName, setNewPayeeName] = useState("");
+  const [addingPayee, setAddingPayee] = useState(false);
+  const [deletingPayee, setDeletingPayee] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const [activeTab, setActiveTab] = useState<string | null>("categories");
   const [selectedCycleId, setSelectedCycleId] = useState<string | null>(null);
   const [isAddSnapshotCategoryOpen, setAddSnapshotCategoryOpen] =
@@ -186,6 +199,26 @@ export function BudgetDetail({ budget, userRole, userId }: BudgetDetailProps) {
     setCategoryFilter(null);
   };
 
+  const handleAddPayee = async () => {
+    if (!newPayeeName.trim()) return;
+    setAddingPayee(true);
+    try {
+      const response = await fetch(`/api/budgets/${budget.id}/payees`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newPayeeName.trim() }),
+      });
+      if (response.ok) {
+        setNewPayeeName("");
+        router.refresh();
+      }
+    } catch (error) {
+      console.error("Error adding payee:", error);
+    } finally {
+      setAddingPayee(false);
+    }
+  };
+
   const isOwner = userRole === "OWNER";
   const canEdit = userRole !== "VIEWER";
   const hasMultipleMembers = budget.members.length > 1;
@@ -208,6 +241,8 @@ export function BudgetDetail({ budget, userRole, userId }: BudgetDetailProps) {
         color: c.color,
         allocationMethod: c.allocationMethod,
         allocationValue: c.allocationValue,
+        carryOverEnabled: (c as Category).carryOverEnabled ?? null,
+        editableByAll: (c as Category).editableByAll ?? true,
       }));
 
   // Sort categories so REMAINING is always last
@@ -462,6 +497,7 @@ export function BudgetDetail({ budget, userRole, userId }: BudgetDetailProps) {
             Categories ({sortedCategories.length})
           </Tabs.Tab>
           <Tabs.Tab value="expenses">Expenses</Tabs.Tab>
+          <Tabs.Tab value="payees">Payees ({budget.payees.length})</Tabs.Tab>
           <Tabs.Tab value="members">Members ({budget.members.length})</Tabs.Tab>
         </Tabs.List>
 
@@ -493,6 +529,7 @@ export function BudgetDetail({ budget, userRole, userId }: BudgetDetailProps) {
                   canEdit={canEdit}
                   isOwner={isOwner}
                   onClick={() => handleCategoryClick(category.id)}
+                  onEdit={() => setEditingCategory(category)}
                   onDelete={() =>
                     setDeletingCategory({
                       id: category.id,
@@ -541,6 +578,57 @@ export function BudgetDetail({ budget, userRole, userId }: BudgetDetailProps) {
             payees={budget.payees}
             members={budget.members}
           />
+        </Tabs.Panel>
+
+        <Tabs.Panel value="payees">
+          <Stack gap="md">
+            {canEdit && (
+              <Group>
+                <TextInput
+                  placeholder="New payee name"
+                  value={newPayeeName}
+                  onChange={(e) => setNewPayeeName(e.currentTarget.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleAddPayee()}
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  onClick={handleAddPayee}
+                  loading={addingPayee}
+                  disabled={!newPayeeName.trim()}
+                >
+                  Add Payee
+                </Button>
+              </Group>
+            )}
+            {budget.payees.length === 0 ? (
+              <Paper withBorder p="xl" ta="center">
+                <Text c="dimmed">
+                  No payees yet. Add a payee above to get started.
+                </Text>
+              </Paper>
+            ) : (
+              <Stack gap="sm">
+                {budget.payees.map((payee) => (
+                  <Paper key={payee.id} withBorder p="md" radius="md">
+                    <Group justify="space-between">
+                      <Text fw={500}>{payee.name}</Text>
+                      {isOwner && (
+                        <ActionIcon
+                          variant="subtle"
+                          color="red"
+                          onClick={() =>
+                            setDeletingPayee({ id: payee.id, name: payee.name })
+                          }
+                        >
+                          <Trash2 size={16} />
+                        </ActionIcon>
+                      )}
+                    </Group>
+                  </Paper>
+                ))}
+              </Stack>
+            )}
+          </Stack>
         </Tabs.Panel>
 
         <Tabs.Panel value="members">
@@ -647,6 +735,35 @@ export function BudgetDetail({ budget, userRole, userId }: BudgetDetailProps) {
           budgetId={budget.id}
           cycleId={cycleData.cycle.id}
           onSuccess={fetchCycleData}
+        />
+      )}
+
+      {editingCategory && (
+        <EditCategoryModal
+          opened={!!editingCategory}
+          onClose={() => setEditingCategory(null)}
+          budgetId={budget.id}
+          category={editingCategory}
+          existingCategories={budget.categories}
+          onSuccess={() => {
+            setEditingCategory(null);
+            router.refresh();
+            fetchCycleData();
+          }}
+        />
+      )}
+
+      {deletingPayee && (
+        <DeletePayeeModal
+          opened={!!deletingPayee}
+          onClose={() => setDeletingPayee(null)}
+          budgetId={budget.id}
+          payee={deletingPayee}
+          otherPayees={budget.payees.filter((p) => p.id !== deletingPayee.id)}
+          onSuccess={() => {
+            setDeletingPayee(null);
+            router.refresh();
+          }}
         />
       )}
     </Container>
